@@ -1,0 +1,40 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.provenpaid/mcp",
+  "title": "ProvenPaid",
+  "description": "Check an x402 endpoint before your agent pays it: challenge validity and on-chain payer evidence.",
+  "websiteUrl": "https://api.provenpaid.com",
+  "repository": {
+    "url": "https://github.com/justinsmithphd/provenpaid-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "provenpaid-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "PROVENPAID_WALLET_PRIVATE_KEY",
+          "description": "Private key of a dedicated low-balance wallet holding USDC on Base. Used only to sign payment authorizations.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "PROVENPAID_DAILY_LIMIT",
+          "description": "Maximum paid checks per UTC day (default 20).",
+          "isRequired": false
+        },
+        {
+          "name": "PROVENPAID_MAX_PRICE_USD",
+          "description": "Refuse checks priced above this (default 0.01, hard ceiling 0.10).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
