@@ -27,8 +27,9 @@ def build_server(client: ProvenPaidClient) -> MCPServer:
     async def check_x402_endpoint(url: str) -> dict:
         """Check a paid x402 endpoint before paying it. Pays ProvenPaid about $0.01 in USDC on Base.
 
-        Returns the endpoint's payment challenge validation and public on-chain evidence for its
-        receiving address: distinct payers, repeat-payer share, payer concentration and coverage.
+        Returns payer depth first: how many distinct wallets paid the endpoint's receiving address
+        (x402-style, last 30 days), repeat-payer share, payer concentration and coverage, with a
+        one-line statement. Then the full on-chain detail and the payment challenge validation.
         Not charged for invalid, unsafe, non-x402 or unsupported URLs.
         """
         return await client.check(url)
