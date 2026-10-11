@@ -24,20 +24,20 @@
     "url": "https://github.com/justinsmithphd/provenpaid-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "provenpaid-mcp",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "PROVENPAID_WALLET_PRIVATE_KEY",
-          "description": "Private key of a dedicated low-balance wallet holding USDC on Base. Used only to sign payment authorizations.",
-          "isRequired": true,
+          "description": "Optional. Private key of a dedicated low-balance wallet holding USDC on Base, used only to sign payments after the 10 free checks. Not needed to try it.",
+          "isRequired": false,
           "isSecret": true
         },
         {
