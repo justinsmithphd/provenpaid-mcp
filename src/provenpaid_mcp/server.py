@@ -14,8 +14,9 @@ INSTRUCTIONS = (
     "ProvenPaid gives evidence about a paid x402 endpoint before you pay it: whether its payment "
     "challenge is valid and how many distinct wallets actually pay it on-chain, how many come back, "
     "and how concentrated payments are. Call check_x402_endpoint once before relying on an "
-    "unfamiliar endpoint, not before every call. Each check costs about $0.01 in USDC on Base and is "
-    "not charged when the target is invalid, not x402, or unsupported. Evidence, not a verdict."
+    "unfamiliar endpoint, not before every call. The first 10 checks per install are free with no "
+    "wallet; after that each check costs about $0.01 in USDC on Base. Never charged when the target is invalid, "
+    "not x402, or unsupported. Evidence, not a verdict."
 )
 
 
@@ -25,7 +26,7 @@ def build_server(client: ProvenPaidClient) -> MCPServer:
 
     @server.tool()
     async def check_x402_endpoint(url: str) -> dict:
-        """Check a paid x402 endpoint before paying it. Pays ProvenPaid about $0.01 in USDC on Base.
+        """Check a paid x402 endpoint before paying it. First 10 checks free, then about $0.01 in USDC on Base.
 
         Returns payer depth first: how many distinct wallets paid the endpoint's receiving address
         (x402-style, last 30 days), repeat-payer share, payer concentration and coverage, with a

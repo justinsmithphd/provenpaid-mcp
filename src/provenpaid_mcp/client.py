@@ -11,16 +11,19 @@ The private key is held only in memory and never logged or returned.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
 from .budget import DailyBudget
+from . import identity
 from .config import USDC, Settings
 
 TIMEOUT_S = 90.0  # a check can take up to ~70 s server side
-USER_AGENT = "provenpaid-mcp/0.1"
+USER_AGENT = "provenpaid-mcp/0.2"
+FREE_LIMIT = 10
 
 
 def _guard_policy(settings: Settings):
@@ -80,6 +83,8 @@ class ProvenPaidClient:
         self._transport = transport
         self.payer: str | None = None
         self._payment = None
+        self.identity = identity.load_or_create(settings.state_dir)
+        self._free_path = settings.state_dir / "free.json"
         if settings.can_pay:
             self._payment, self.payer = build_payment_client(settings, self.budget)
 
@@ -101,8 +106,46 @@ class ProvenPaidClient:
             r.raise_for_status()
             return r.text
 
+    def _free_state(self) -> dict:
+        try:
+            return json.loads(self._free_path.read_text())
+        except (OSError, ValueError):
+            return {"remaining": FREE_LIMIT}
+
+    def _save_free(self, remaining: int) -> None:
+        try:
+            self._free_path.write_text(json.dumps({"remaining": max(0, remaining)}))
+        except OSError:
+            pass
+
+    async def _free_check(self, url: str) -> tuple[str, dict]:
+        """('done', result) to return now, or ('fallback', {}) to try paying."""
+        headers = identity.free_headers(self.identity, url)
+        try:
+            async with self._client(paying=False) as c:
+                r = await c.get(f"{self.settings.api_url}/v1/free-check", params={"url": url}, headers=headers)
+        except httpx.HTTPError as e:
+            return "done", {"charged": False, "error": "network", "detail": type(e).__name__}
+        try:
+            body = r.json()
+        except ValueError:
+            body = {"detail": r.text[:500]}
+        code = body.get("error") if isinstance(body, dict) else None
+        if r.status_code == 200:
+            remaining = int(body.get("free_tier", {}).get("remaining", 0))
+            self._save_free(remaining)
+            return "done", {"charged": False, "free_check": True, "free_checks_remaining": remaining, "report": body}
+        if r.status_code == 402 or code == "free_quota_used":
+            self._save_free(0)
+            return "fallback", {}
+        if r.status_code in (404, 429):  # free tier off, or today's free cap reached
+            return "fallback", {"free_unavailable": code or str(r.status_code)}
+        return "done", {"charged": False, "status": r.status_code, **(body if isinstance(body, dict) else {"detail": body})}
+
     def status(self) -> dict:
         return {
+            "free_checks_remaining": self._free_state().get("remaining", FREE_LIMIT),
+            "free_tier_identity": self.identity.address,
             "api": self.settings.api_url,
             "network": self.settings.network,
             "paying_wallet": self.payer,
@@ -115,16 +158,24 @@ class ProvenPaidClient:
         problem = valid_target(url)
         if problem:
             return {"charged": False, "error": "invalid_input", "detail": problem}
+        url = url.strip()
+        note: dict = {}
+        if self._free_state().get("remaining", FREE_LIMIT) > 0:
+            outcome, result = await self._free_check(url)
+            if outcome == "done":
+                return result
+            note = result
         if not self.settings.can_pay:
-            return {"charged": False, "error": "wallet_not_configured",
-                    "detail": "Set PROVENPAID_WALLET_PRIVATE_KEY to a dedicated, low-balance wallet "
-                              "holding USDC on Base. See the README."}
+            return {"charged": False, "error": "wallet_not_configured", **note,
+                    "detail": "The free checks for this install are used up (or unavailable today). To keep "
+                              "checking, set PROVENPAID_WALLET_PRIVATE_KEY to a dedicated, low-balance wallet "
+                              "holding USDC on Base ($0.01 per check). See the README."}
         from x402 import NoMatchingRequirementsError, PaymentAbortedError
         from x402.http.clients.httpx import PaymentError
 
         try:
             async with self._client(paying=True) as c:
-                r = await c.get(f"{self.settings.api_url}/v1/check", params={"url": url.strip()})
+                r = await c.get(f"{self.settings.api_url}/v1/check", params={"url": url})
         except PaymentAbortedError as e:
             return {"charged": False, "error": "budget", "detail": str(e)}
         except NoMatchingRequirementsError:
